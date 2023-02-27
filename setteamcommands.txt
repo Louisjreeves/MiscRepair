@@ -1,0 +1,23 @@
+New-VMSwitch -Name "SET Team" -NetAdapterName "NIC 1","NIC 2"
+
+#To see members
+Get-VMSwitchTeam -Name "SET Team" | fl 
+
+#To set members
+Set-VMSwitchTeam -Name SET Team -NetAdapterName "NIC 1","NIC 3"
+#Remove 1 nic
+Set-VMSwitchTeam -Name "SET Team" -NetAdapterName "NIC 3"
+#Add back 1 nic
+Set-VMSwitchTeam -Name "SET Team" -NetAdapterName "NIC 3","NIC 2"
+ 
+
+#Remove set team
+Remove-VMSwitch "SET Team"
+
+#To look at load ballancing
+Get-VMSwitchTeam -Name "SET Team" | FL
+
+#Not sure how this switch will act with different load ballancing- 
+
+Set-VMSwitchTeam -Name "SET Team" -LoadBalancingAlgorithm Dynamic
+Set-VMSwitchTeam -Name "SET Team" -LoadBalancingAlgorithm HyperVPort

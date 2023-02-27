@@ -1,0 +1,33 @@
+
+
+Remove and replace disk --- >> 
+
+==============================================================
+
+#1 Move ownersh ot of cluster group, and all vms , and all storage to other nodes besides 1A
+
+#2******* Remove CSV from Cluster CSV-04
+
+
+#3 Powershell Get-CLusterGroup
+
+#4 Get-ClusterResource "Cluster Virtual Disk Csv4-S2d" | Set-ClusterParameter -Name DiskRecoveryAction -Value 1
+Start-ClusterResource -Name "Cluster Virtual Disk Csv4-S2d"
+
+
+** jeep checking get-storagejob (from another server)
+
+When command completes run step 5
+
+#5 Get-ClusterResource "Cluster Virtual Disk Csv4-S2d" | Set-ClusterParameter -Name DiskRecoveryAction -Value 0\
+
+Stop-clusterresource "Cluster Virtual Disk Csv4-S2d"
+Start-clusterResource "Cluster Virtual Disk Csv4-S2d"
+
+#6 Put CSV back into cluster - 
+Add-ClusterSharedVolume -name "Cluster Virtual Disk Csv4-S2d"
+
+https://learn.microsoft.com/en-us/windows-server/storage/storage-spaces/troubleshooting-storage-spaces
+
+
+

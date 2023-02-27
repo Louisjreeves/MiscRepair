@@ -1,0 +1,166 @@
+# Set the output folder where the registry files will be stored
+$backupFolder= $env:HOMEDRIVE + $env:HOMEPATH + "\backup"
+$backupfile = "$backupFolder\shareperms.reg"
+$savefiles = $backupFolder + "\backupfiles.log"
+set-location -Path $backupFolder
+# Create the backup folder if it doesn't already exist
+
+ 
+
+# Check if the file exists and has no content  # Create the new file
+if (!(Test-Path -Path $backupFolder)) {New-Item -ItemType Directory -Path $backupFolder -Force}  
+
+if (!(Test-Path -Path $backupfile) -or (-not (Get-Content -Path $backupfile))) {New-Item -ItemType File -Path $backupfile -Force}
+if (!(Test-Path -Path $savefiles) -or (-not (Get-Content -Path $savefiles))) {New-Item -ItemType File -Path $savefiles -Force}  
+
+ 
+
+
+$backrestore= read-host "Are you backing up or restoring for your repair?. r for Restore or b for Backup r/b"
+
+If ($backrestore -eq "b")
+{
+# Get a list of all the shares defined in the registry
+$share2 = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Shares" | Select-Object -Property Name, Property, PSPath, PSParentPath
+ 
+$shares = Get-SmbShare | Select-Object Name,Path
+ 
+
+#$fqddn= Get-SmbShare | Where-Object { $_.Name -notlike "*$*" } | Select-Object Path
+$fqddn= Get-SmbShare | Where-Object { ($_.Name -notlike "*$*") -and ($_.Path -notlike "C:\Windows\*") } | Select-Object Path
+
+set-location -Path $backupFolder
+foreach ($path in $fqddn) {
+     
+       # Add-Content -Path $savefiles -Value $path
+    Add-Content -Path $savefiles -Value (Select-Object -InputObject $path -ExpandProperty Path)
+       $path
+
+
+    }
+
+
+ 
+set-location -Path $backupFolder
+Write-host "this can take many minutes to backup.Make sure thereis no existing file in the backup folder!" -ForegroundColor Red
+
+# Set the path and name of the registry file to export
+ 
+
+# Start a new process to export the share definitions to the registry file
+$retryCount = 0
+$maxRetries = 1
+do {
+    $proc = Start-Process -FilePath reg.exe -ArgumentList "export HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Shares `"$backupFile`"" -NoNewWindow -Wait -PassThru
+    if ($proc.ExitCode -ne 0) {
+        $retryCount++
+        Write-Warning "Process failed with exit code $($proc.ExitCode). Retrying ($retryCount of $maxRetries)..."
+    }
+} while ($retryCount -lt $maxRetries -and $proc.ExitCode -ne 0)
+
+Read-host "Done!... Hit enter"
+
+foreach ($share in $shares) {
+    # Get the share name and path
+    Set-Location -Path $backupFolder
+     Write-host "Hit cancel if the backupfile is aready created! !!! make sure its empty backup folder or Freeze!" -ForegroundColor Red
+     write-host "dont backup admin shares or c$ or D$ or anything like that- those share are part of the OS. Only backup data!!!" -ForegroundColor Green
+     $readmy = read-host ("Would youlike to backup", $share.name, "? y/n")
+     
+     if ($readmy -ne "n")
+     {
+
+     $share.Path
+     $share.name
+     $myfilename = $share.Name
+    icacls $share.Path /save $myfilename /t /c
+
+     
+     }
+     }
+#icacls $share.Path /save ntfsperms.txt /t /c
+    # Export the share definition to a registry file
+  #  New-ItemProperty -Path $share.PSParentPath -Name "$name.reg" -Value $share.PSPath -PropertyType String -Force | Out-Null
+
+    # Export the permissions to a text file
+   # icacls $path /save $permissionsFile | Out-Null
+
+
+}
+
+If ($backrestore -eq "r")
+{
+
+Clear-host
+ read-host "The restore files must be placed in your user directory, in a folder called backup. Make it so and hit enter"
+ $backupFolder= $env:HOMEDRIVE + $env:HOMEPATH + "\backup"
+
+Set-Location -Path $backupFolder
+$myrestore= $backupFolder + "\shareperms.reg"
+ #import from backup folder 
+start-process -ArgumentList "import:reg export HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Shares" shareperms.reg
+
+#populate for Icacls permissions 
+$share2 = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Shares" | Select-Object -Property Name, Property, PSPath, PSParentPath
+$shares = Get-SmbShare | Select-Object Name,Path -WarningAction SilentlyContinue 
+
+
+#get the files from folder and get the share names 
+
+# Set the path to the folder containing the text files
+$Backupfolder = $env:HOMEDRIVE + $env:HOMEPATH + "\backup"
+Set-Location -Path $backupFolder
+# Get a list of all the text files in the folder
+$sharenames = Get-ChildItem -Path $Backupfolder -Filter "*."
+#$sharenames2 = Get-ChildItem -Path $Backupfolder -Filter "*."
+
+
+
+
+# Set the path of the folder containing the text files
+$folderPath = $Backupfolder
+$backupFolder= $env:HOMEDRIVE + $env:HOMEPATH + "\backup"
+$backupfile = "$backupFolder\shareperms.reg"
+$savefiles = $backupFolder + "\backupfiles.log"
+set-location -Path $backupFolder
+
+
+# Get Paths to restore Icacls 
+$paths = Get-Content -Path $savefiles
+
+foreach ($path in $paths){ 
+ try{
+ #$resfile= 'n'
+  $parent = Split-Path -Path $path -Parent
+    $name = Split-Path -Path $path -Leaf
+
+     #Write-host $parent -ForegroundColor red
+    #  Write-host $name -ForegroundColor red
+    Foreach ($sahr in $sharenames.name){
+   # Write-host $sahr -ForegroundColor Green
+    
+    if ($name -like $sahr){
+    Set-Location -Path $backupFolder
+    Write-host "$sahr "=" $name" -ForegroundColor Green
+     icacls $parent /restore $sahr /t /c
+    
+    
+    }
+
+   }
+   
+   
+
+
+     } catch {Write-host $name, "is a problem. cant Icacls " 
+
+ }
+ }
+
+ 
+}
+
+
+
+
+
