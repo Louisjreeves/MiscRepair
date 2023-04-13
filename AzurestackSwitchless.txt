@@ -1,0 +1,141 @@
+####################
+# Set the Management IP
+####################
+$SwitchlessNodeID = 1 #Update to the current Node number being configured.
+$SwitchlessClusterNodes = 4 #Edit with number of nodes in the cluster.
+$ManagementSwitchName = 'Management'
+$ManagementNetAdapterName = @('Integrated NIC 1 Port 3',’Integrated NIC 1 Port 4')
+#Update based on Get-Netdapter output for Management NICs
+$ManagementAdapterName = 'Management'
+$ManagementVlanId = 70
+$ManagementGateway = '192.168.0.240' #Update to customer provided Gateway
+$ManagementDns = '192.168.0.122' #Update to customer provided DNS
+$ManagementIPAddress =
+@('192.168.16.196','192.168.16.197','192.168.16.198','192.168.16.199') #Update based on
+Customer IPs
+$ManagementAddressPrefix = 19
+$ManagementIPAddress = $ManagementIPAddress[$SwitchlessNodeID-1]
+$null = New-VMSwitch -Name $ManagementSwitchName -AllowManagementOS 0 -NetAdapterName
+$ManagementNetAdapterName -MinimumBandwidthMode Weight -Verbose
+$managementAdapter = Add-VMNetworkAdapter -SwitchName $ManagementSwitchName
+-ManagementOS -Passthru -Name $ManagementAdapterName -Verbose
+if ($ManagementVlanId -and ($ManagementVlanId -ne 0)) {
+Set-VMNetworkAdapterVlan -VMNetworkAdapter $managementAdapter -Access -VlanId
+$ManagementVlanId -Verbose
+Start-Sleep -Seconds 5
+}
+#check if adapter vlan is properly created
+get-VMNetworkAdapterVlan -ManagementOS
+####################
+#configure DNS
+####################
+Write-Output "Management IP address: $ManagementIPAddress"
+$null = New-NetIPAddress -InterfaceAlias "vEthernet ($ManagementAdapterName)"
+-IPAddress $ManagementIPAddress -DefaultGateway $ManagementGateway -PrefixLength
+$ManagementAddressPrefix -Verbose
+Set-DnsClientServerAddress -InterfaceAlias "vEthernet ($ManagementAdapterName)"
+-ServerAddresses $ManagementDns -Verbose
+####################
+#Disable unwanted ports – ensure that only the ports for Switchless Storage are up
+and connected in the right order based on the Cabling instructions provided above. If
+there are additional NICs or ports not being used for Storage Network Up and Available,
+the script will assign IP and rename the Network Storage Adapter use Get-NetAdapter
+-Physical | Sort MacAddress to get a list of all the available ports and disable by
+selecting the ifIndex, example;
+####################
+#Get-NetAdapter | ? ifIndex -like #<add desired port to disable> | Disable-NetAdapter
+#Setup Storage Network for Switchless Topology
+$StorageSubnet = '172.16.0.0'
+$SingleStorageIPAddress =
+@('172.16.12','172.16.13','172.16.14','172.16.23','172.16.24','172.16.34')
+$DualStorageIPAddress =
+@('172.16.21','172.16.31','172.16.41','172.16.32','172.16.42','172.16.43')
+$SingleAdapterNames =
+@('Storage1-2','Storage1-3','Storage1-4','Storage2-3','Storage2-4','Storage3-4')
+$DualAdapterNames =
+@('Storage2-1','Storage3-1','Storage4-1','Storage3-2','Storage4-2','Storage4-3')
+$StorageAddressPrefix = 29
+$supportedAdapters = @("Mellanox", "QLogic")
+$StorageAdapter = Get-NetAdapter | Where InterfaceDescription -Match ($supportedAdapters
+-Join "|") | ? Status -like Up | sort Name | Get-NetAdapterHardwareInfo | ? Slot -GE 1 |
+Sort-Object Slot,Function
+if ( $StorageAdapter ) {
+Write-Output 'These adapters will be used for storage (dependant on cluster size):'
+Write-Output $($StorageAdapter | Format-Table Name,Description,Slot,Function)
+Pause
+} else {
+throw 'No RDMA Storage Adapters found!'
+}
+$SingleStorageIPAddress = $SingleStorageIPAddress | ForEach-Object { if
+(($_).Substring(($_).Length -2) -match $SwitchlessNodeID) { $_ } }
+$DualStorageIPAddress = $DualStorageIPAddress | ForEach-Object { if
+(($_).Substring(($_).Length -2) -match $SwitchlessNodeID) { $_ } }
+$SingleStorageIPAddress = $SingleStorageIPAddress | ForEach-Object { $_ + '.' +
+$SwitchlessNodeID }
+$DualStorageIPAddress = $DualStorageIPAddress | ForEach-Object { $_ + '.' +
+$SwitchlessNodeID }
+$StorageSubnet = $StorageSubnet.Split('.')[0] + '.' + $StorageSubnet.Split('.')[1]
+$SingleStorageIPAddress = $SingleStorageIPAddress | ForEach-Object { $_.Replace('172.16',
+$StorageSubnet) }
+$DualStorageIPAddress = $DualStorageIPAddress | ForEach-Object { $_.Replace('172.16',
+$StorageSubnet) }
+$SingleAdapterNames = $SingleAdapterNames | ForEach-Object { if ( $_ -match
+$SwitchlessNodeID) { $_ } }
+$DualAdapterNames = $DualAdapterNames | ForEach-Object { if ( $_ -match
+$SwitchlessNodeID) { $_ } }
+Write-Output "Storage IP Addresses: $(($SingleStorageIPAddress)[0..
+($SwitchlessClusterNodes -2)]) ($(($DualStorageIPAddress )[0..($SwitchlessClusterNodes
+-2)]))"
+Write-Output "Storage Adapter Names: $(($SingleAdapterNames)[0..($SwitchlessClusterNodes
+-2)]) ($(($DualAdapterNames)[0..($SwitchlessClusterNodes -2)]))"
+Pause
+##
+$mlnx=$StorageAdapter.InterfaceDescription -Match "Mellanox"
+$qlogic=$StorageAdapter.InterfaceDescription -Match "QLogic"
+if (($mlnx -and $qlogic) ) {
+throw 'Multiple vendors for storage adapters found'
+} else {
+if ($mlnx) {
+$NetProtocol = "RoCEv2"
+} elseif ($qlogic) {
+$NetProtocol = "iWarp"
+} else {
+Throw 'No RDMA storage adapters found!'
+}
+}
+####################
+## Enable RDMA and Assign IPs and Rename Adapters for Storage Network
+####################
+$StorageAdapter | Enable-NetAdapterRdma
+## Assing Storage IP and Rename Storage Adapters
+if ( ($SwitchlessClusterNodes -1) -le $StorageAdapter.Count ) {
+Write-Output 'Configuring Single-Link Full Mesh Switchless Networks…'
+for ($i=0;$i -lt ($SwitchlessClusterNodes -1);$i++) {
+Write-Output "Adapter: $(($StorageAdapter)[$i].Description) Name: $
+($SingleAdapterNames[$i]) IP: $($SingleStorageIPAddress[$i])"
+$null = New-NetIPAddress -InterfaceAlias ($StorageAdapter)[$i].Name -IPAddress
+$SingleStorageIPAddress[$i] -PrefixLength $StorageAddressPrefix -Verbose
+Set-NetAdapterAdvancedProperty -Name ($StorageAdapter)[$i].Name -DisplayName
+'NetworkDirect Technology' -DisplayValue $NetProtocol
+Get-NetAdapter -Name ($StorageAdapter)[$i].Name | Rename-NetAdapter -NewName
+$SingleAdapterNames[$i]
+}
+if ( ($SwitchlessClusterNodes -1)*2 -le $StorageAdapter.Count ) {
+Write-Output 'Configuring Dual-Link Full Mesh Switchless Networks…'
+$n = $SwitchlessClusterNodes -1
+for ($i=0;$i -lt ($SwitchlessClusterNodes -1);$i++) {
+Write-Output "Adapter: $(($StorageAdapter)[$n].Description) Name: $
+($DualAdapterNames[$i]) IP: $($DualStorageIPAddress[$i])"
+$null = New-NetIPAddress -InterfaceAlias ($StorageAdapter)[$n].Name
+-IPAddress $DualStorageIPAddress[$i] -PrefixLength $StorageAddressPrefix -Verbose
+Set-NetAdapterAdvancedProperty -Name ($StorageAdapter)[$n].Name -DisplayName
+'NetworkDirect Technology' -DisplayValue $NetProtocol
+Get-NetAdapter -Name ($StorageAdapter)[$n].Name | Rename-NetAdapter -NewName
+$DualAdapterNames[$i]
+$n++
+}
+}
+} else {
+throw "Not enough Storage NICs available based on cluster size of
+$SwitchlessClusterNodes!"
+}
