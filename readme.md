@@ -11,7 +11,7 @@
 Link to download and administer here: 
 
 ``` Powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;Invoke-Expression('$module="MiscRepair";$repo="PowershellScripts"'+(new-object System.net.webclient).DownloadString('https://github.com/Louisjreeves/MiscRepair/blob/main/4CornersTestandGraph.zip'));Begin4corners.ps1
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;Invoke-Expression('$module="MiscRepair";$repo="PowershellScripts"'+(new-object System.net.webclient).DownloadString('https://github.com/Louisjreeves/MiscRepair/blob/89b54c3e2de097d0632bc8dd7b4d08dd5fe5fdb8/4CornersTestandGraph.zip'));Begin4corners.ps1
 ```
 
 
