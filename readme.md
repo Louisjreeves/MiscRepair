@@ -16,7 +16,7 @@ Below are steps and screenshots with information on setting up the disk tests.
 ⦁	Unzip 4Corner_Test.7z to “C:\Temp”.  Rename diskspd.__e to diskspd.exe
 ⦁	Remove the “renameme” extension name. 
 
- https://github.com/Louisjreeves/MiscRepair/blob/main/r1.bmp
+[link1](https://github.com/Louisjreeves/MiscRepair/blob/main/r1.bmp)
 
 ⦁	In an Admin PowerShell window go to the C:\temp directory and bring up the “DskSpd4C.ps1” file. 
 
