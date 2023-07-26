@@ -1,4 +1,4 @@
-Begin4corners.ps1
+ 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
  
 $mydownloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
@@ -11,7 +11,7 @@ $myloca = "$mytemp\"
  try
  {
 
-$response = Invoke-WebRequest -Uri https://github.com/Louisjreeves/MiscRepair/raw/main/CornersTestandGraph.zip -OutFile $myloca\CornersTestandGraph.zip  
+$response = Invoke-WebRequest -Uri https://github.com/Louisjreeves/MiscRepair/raw/main/CornersTestandGraph.zip -OutFile $MyTemp\CornersTestandGraph.zip  
  } catch 
  {
     $StatusCode = $_.Exception.Response.StatusCode.value__
@@ -23,5 +23,5 @@ $response = Invoke-WebRequest -Uri https://github.com/Louisjreeves/MiscRepair/ra
  
  
  
- set-location $mydownloads\CornersTestandGraph 
+ set-location "$mydownloads\CornersTestandGraph\" 
   .\CornersTestandGraph.ps1
