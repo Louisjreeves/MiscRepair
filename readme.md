@@ -4,8 +4,8 @@
 ## AUtomation for Making 4 Corners Disk Testing more successful. ##
 
 
-#The Script automates the test for the 4 best performing Latency counters for disk testing. #
-#it also has a longers test which takes over an hour to administer per node#
+# The Script automates the test for the 4 best performing Latency counters for disk testing. #
+# It also has a longers test which takes over an hour to administer per node #
 
 
 Link to download and administer here: 
