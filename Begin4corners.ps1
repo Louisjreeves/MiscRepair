@@ -1,8 +1,5 @@
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
- Set-ExecutionPolicy Unrestricted -scope Process 
-
-
-
+ 
 $mydownloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
 
 $MyTemp =(Get-Item $mydownloads).fullname
