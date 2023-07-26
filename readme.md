@@ -11,7 +11,7 @@
 Link to download and administer here: 
 
 ``` Powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;Invoke-Expression('$module="CornersTestandGraph";$repo="PowershellScripts"'+(new-object System.net.webclient).DownloadString('https://raw.githubusercontent.com/Louisjreeves/MiscRepair/main/CornersTestandGraph.zip')); Begin4corners.ps1
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;Invoke-Expression('$module="CornersTestandGraph";$repo="PowershellScripts"'+(new-object System.net.webclient).DownloadString('https://github.com/Louisjreeves/MiscRepair/blob/main/4CornersTestandGraph.zip'));Begin4corners.ps1
 ```
 
 
