@@ -1,7 +1,7 @@
 4 corners test
 
 
-## AUtomation for Making 4 Corners Disk Testing more successful. ##
+## Automation for making 4 Corners Disk Testing more successful. ##
 
 
 # The Script automates the test for the 4 best performing Latency counters for disk testing. #
