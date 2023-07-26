@@ -5,7 +5,7 @@ $mydownloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downlo
 $MyTemp =(Get-Item $mydownloads).fullname
 $myloca = $PsScriptRoot
 $myloca = "$mytemp\4CornersTestandGraph\"
- 
+ Set-location -Path $MyTemp
  try
  {
 
