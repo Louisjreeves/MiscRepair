@@ -5,7 +5,7 @@
 
 
 # The Script automates the test for the 4 best performing Latency counters for disk testing. #
-# It also has a longers test which takes over an hour to administer per node #
+# It also has a longer test which takes over an hour to administer per node #
 
 
 Link to download and administer here: 
