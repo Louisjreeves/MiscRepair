@@ -3,7 +3,8 @@
 $mydownloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
 
 $MyTemp =(Get-Item $mydownloads).fullname
-
+$myloca = $PsScriptRoot
+$myloca = "$mytemp\4CornersTestandGraph\"
  
  try
  {
@@ -18,7 +19,7 @@ $response = Invoke-WebRequest -Uri https://github.com/Louisjreeves/MiscRepair/ra
       Expand-Archive -Path $mydownloads\CornersTestandGraph.zip -DestinationPath $mydownloads\CornersTestandGraph -Force
  
  
- $activedirectory= "C:\Users\*\Downloads\CornersTestandGraph\"
- cd c:\
- set-location $mydownloads
+ 
+ 
+ set-location $myloca
   .\CornersTestandGraph.ps1
