@@ -1,0 +1,28 @@
+$lang="Ko-KR" #example language for packages zh-TW for chinese
+
+Function Set-RegKeyPerm($KeyPath) {
+$key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey(((Get-Location).ProviderPath).Replace("HKEY_LOCAL_MACHINE\",""),[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,[System.Security.AccessControl.RegistryRights]::ChangePermissions)
+$acl = $key.GetAccessControl()
+$rule = New-Object System.Security.AccessControl.RegistryAccessRule ('BuiltIn\Administrators','FullControl', 'ContainerInherit', 'None', 'Allow')
+$acl.SetAccessRule($rule)
+$key.SetAccessControl($acl)
+}
+$key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackageDetect",[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,[System.Security.AccessControl.RegistryRights]::ChangePermissions)
+
+Push-Location
+if (!(Test-Path PackageDetect.reg)) { reg export 'HKLM\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackageDetect' PackageDetect.reg;echo "Exported Registry"}
+Set-Location 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackageDetect'
+#Set-RegKeyPerm 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackageDetect'
+foreach ($pkey in (ls -Recurse | ?{$_.Property -cmatch $lang})) {
+set-location $pkey.PSChildName
+Set-RegKeyPerm $pkey.Name
+echo "Set Admins permissions on $(Get-Location)"
+Foreach ($prop in ($pkey.property | ?{$_ -cmatch $lang})) {
+Remove-ItemProperty -Name $prop -Path .
+echo "Removed key $prop"
+}
+Set-Location 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackageDetect'
+#pause
+}
+Pop-Location
+ 
