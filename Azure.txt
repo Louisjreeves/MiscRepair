@@ -1,0 +1,256 @@
+
+
+#Install Windows Features
+Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All
+
+##########create new local admin for deploy ##########################################
+$NewLocalAdmin = Read-Host
+$Password = Read-Host -AsSecureString
+New-LocalUser "$NewLocalAdmin" -Password $Password -FullName "$NewLocalAdmin" -Description "Local User for HCI Deployment" | Add-LocalGroupMember -Group "Administrators"
+##############################################
+
+
+#Rename Computer
+Rename-Computer -NewName Node01 -Restart
+
+#Disable DHCP
+# Example Set-NetIPInterface -InterfaceAlias "Port7","Port8","SLOT 6 Port 1","SLOT 6 Port 2" -Dhcp Disabled
+Get-NetIPInterface |
+Where-Object { $_.InterfaceAlias -notin @("Port7", "Port8") } |
+ForEach-Object { Set-NetIPInterface -InterfaceAlias $_.InterfaceAlias -Dhcp Disabled }
+
+
+#Disable Disconnected NICs
+Get-NetAdapter | Where-Object {$_.status -eq "disconnected"} | Disable-NetAdapter 
+
+#Set Management IP address
+New-NetIPAddress -InterfaceAlias "Port7" -IPAddress 100.72.4.113 -DefaultGateway 100.72.4.1 -PrefixLength 24 -AddressFamily IPv4 -Verbose
+
+##############check cards intents device id ##################
+Get-NetAdapter | Select name , ComponentID
+####################################
+
+#Set VLAN on Management NIC
+Get-NetAdapter -Name SLOT* | Set-NetAdapter -VlanID 0 -Confirm: $false
+
+#Configure DNS Client
+Set-DnsClientServerAddress -InterfaceAlias "Port7" -ServerAddresses 100.72.200.10, 100.72.200.11 
+#Enable ICMP Firewall Rule
+netsh advfirewall firewall add rule name="ICMP Allow incoming V4 echo request" protocol=icmpv4:8,any dir=in action=allow
+
+#Enable Remote Desktop
+Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+###################################
+####### Registry Settings #########
+###################################
+#OEM Provider
+New-itemproperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation" -name SupportProvider -value Dell
+(Get-itemproperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation").SupportProvider
+
+#Exclude OS-to-iDRAC Pass Through for Cluster Networks
+New-Item -Path HKLM:\system\currentcontrolset\services\clussvc
+New-Item -Path HKLM:\system\currentcontrolset\services\clussvc\parameters
+New-ItemProperty -Path HKLM:\system\currentcontrolset\services\clussvc\parameters -Name ExcludeAdaptersByDescription -Value "Remote NDIS Compatible Device"
+###################################
+
+#Configure time source using DNS IP address
+w32tm /config /manualpeerlist:"rreerc-ad03.rreerc.adc.delllabs.net rreerc-ad04.rreerc.adc.delllabs.net" /syncfromflags:manual /update
+w32tm /query /status
+w32tm /resync
+
+#Set Timezone
+Set-TimeZone -Name "Central Standard Time"
+
+#Configure WinRM
+winrm quickconfig
+
+
+
+#Update Drivers with DART -IgnoreChecks:$True required for 23H2 as of 10/21/2024
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;Invoke-Expression('$module="DART";$repo="PowershellScripts"'+(new-object net.webclient).DownloadString('http'+'s://raw.githubusercontent.com/DellProSupportGse/Tools/main/DART.ps1'));Invoke-DART -IgnoreChecks:$True
+
+###################################
+############ Optional #############
+###################################
+
+#Disable Local Firewall
+netsh advfirewall set privateprofile state off
+netsh advfirewall set domainprofile state off
+netsh advfirewall set publicprofile state off
+
+#Disable IPv6
+Set-NetadApterBinding -Componentid ms_tcpip6 -Name * -Enabled:$false
+Get-NetAdapterBinding -Name * -ComponentID ms_tcpip6
+###################################
+
+######## Azure Registration #######
+$region="eastus"
+$ArcGatewayID=""
+$RG="Xa1Pilot"
+$Subscription="62986796-c210-4289-a117-303bce7bc77f"
+$Tenant = "0081ba70-31da-4d1a-a73c-b56477ccc937"
+
+Connect-AzAccount -SubscriptionId $Subscription -TenantId $Tenant -DeviceCode
+
+$downloadUrl = "https://aka.ms/ConfiguratorAppForHCI"
+$downloadPath = Join-Path -Path $PWD.Path -ChildPath "ConfiguratorAppForHCI.exe"
+ 
+# Download the file as binary
+Invoke-WebRequest -Uri $downloadUrl -OutFile $downloadPath -UseBasicParsing
+ 
+# Unblock the file
+Unblock-File -Path $downloadPath
+ 
+# Run the app
+Start-Process -FilePath $downloadPath
+
+# go to azure create deployment and push the arc agent in the validation step 
+
+# remove configurator after registation is done if needed
+Remove-item -path "C:\Users\$env:username\AppData\Roaming\microsoft.-azure.-edge.-oobe.-local-ui" -recurse
+also uninstaller in folder where installed 
+
+# Continue on Azure Portal to Deploy Cluster, Return here after cluster is deployed
+
+###################################
+
+###################################
+######### Best Practices ##########
+###################################
+
+#Determine cluster CSV Block Cache Size
+$blockCacheMB = (Get-Cluster).BlockCacheSize
+
+#Update Page File Block Cache Size
+$blockCacheMB = (Get-Cluster).BlockCacheSize
+$pageFilePath = "C:\pagefile.sys"
+$initialSize = [Math]::Round(51200 + $blockCacheMB)
+$maximumSize = [Math]::Round(51200 + $blockCacheMB) 
+$system = Get-WmiObject -Class Win32_ComputerSystem -EnableAllPrivileges
+if ($system.AutomaticManagedPagefile) { 
+    $system.AutomaticManagedPagefile = $false 
+    $system.Put()
+} 
+$currentPageFile = Get-WmiObject -Class Win32_PageFileSetting
+if ($currentPageFile.Name -eq $pageFilePath){ 
+    $currentPageFile.InitialSize = $InitialSize 
+    $currentPageFile.MaximumSize = $MaximumSize 
+    $currentPageFile.Put()
+}else
+{ 
+    $currentPageFile.Delete() 
+    Set-WmiInstance -Class Win32_PageFileSetting -Arguments @{Name=$pageFilePath; InitialSize = $initialSize; MaximumSize = $maximumSize}
+}
+
+#Update Storage Spaces Port Timeout
+Set-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\spaceport\Parameters -Name HwTimeout -Value 0x00002710 -Verbose
+Restart-Computer -Force
+
+###################################
+
+
+
+
+###################################
+########### SBE Package ###########
+###################################
+
+####### Offline SBE Update ########
+#Download and Extract SBE Package to Unique CSV location. \ClusterStorage\Infrastructure_1\SBE\Bundle_SBE_Dell_AS-HCI-AX_4.1.2405.2001
+# Get-ChildItem -Path C:\ClusterStorage\Infrastructure_1\SBE\Bundle_SBE_Dell_AS-HCI-AX_4.1.2405.2001
+# Mode LastWriteTime Length ` Name
+# ---- ------------- ------ ----
+# -a---- 4/1/2024 7:28 AM 32008 Bundle_SBE_Dell_AS-HCI-AX_4.1.2405.2001.xml
+# -a---- 4/1/2024 7:27 AM 739058535 Bundle_SBE_Dell_AS-HCI-AX_4.1.2405.2001.zip
+# -a---- 4/1/2024 7:28 AM 4188 SBE_Discovery_Dell.xml
+
+#Load SBE Package
+Add-SolutionUpdate -SourceFolder C:\ClusterStorage\Infrastructure_1\SBE\SBE-AX-4.1.2405.2001
+
+#Check Package status, Must show Ready
+Get-SolutionUpdate
+
+#Run Health-Check, Ensure Critical Severity tests show Success
+$result = Test-EnvironmentReadiness
+$result | Format-Table Name,Status,Severity
+
+#This shows all test that do not have Success
+$result | Where-Object {($_.Status -ne "SUCCESS" -and $_.Severity -ne "INFORMATIONAL")}
+
+#Start SBE Package Installation
+Get-SolutionUpdate | Where-Object {$_.State -eq "Ready" -and $_.PackageType -eq "SBE"} | Start-SolutionUpdate
+
+#Check SBE Installation Progress
+$ResourceID = “<enter the resourceID generated by Start-SolutionUpdate>” 
+Get-SolutionUpdate -Id $ResourceID
+#Or use the below 
+Get-SolutionUpdate | Where-Object PackageType -EQ "SBE" | Format-List ResourceID,Description, State, SBEVersion, UpdateStateProperties, HealthState
+
+#You can also monitor the solution update using the following commands:
+#Replace SolutionUpdateID with the Resource ID generated by Get-SolutionUpdate
+$SolutionUpdateId = "redmond/SBE4.0.2402.2501" 
+$ResourceID = Get-SolutionUpdate -Id $SolutionUpdateId | Get-SolutionUpdateRun | Select-Object ResourceID 
+$ActionPlanInstanceID = ($ResourceID -split "/" -replace "}","")[2] 
+Start-MonitoringActionplanInstanceToComplete -actionPlanInstanceID $ActionPlanInstanceID
+###################################
+
+######## Online SBE Update ########
+Get-SolutionUpdate | Format-Table DisplayName, State
+#Start Solution Update
+Get-SolutionUpdate | Start-SolutionUpdate
+#Use the commands from Offline SBE Update steps to monitor progress
+
+###################################
+https://thewindowsupdate.com/2024/01/31/common-deployment-challenges-and-workarounds-for-hci-23h2/
+
+
+###############################
+Pre Deploy Work ################
+##############################
+
+
+
+#predeploy 
+
+Install-Module AsHciADArtifactsPreCreationTool -Repository PSGallery -Force
+
+ $password = ConvertTo-SecureString 'D3llP@ssw0rd!' -AsPlainText -Force
+$user = "XaUser1"
+ $credential = New-Object System.Management.Automation.PSCredential ($user, $password)
+New-HciAdObjectsPreCreation -AzureStackLCMUserCredential $credential -AsHciOUName "OU=X1nodeX1,OU=APEX,OU=Servers,OU=EERC-Computers,DC=rreerc,DC=adc,DC=delllabs,DC=net"   
+### All connect info 
+Connect 
+
+
+#Deployment account info
+$AsHCIOUName="OU=Xa1Pilot,OU=APEX,OU=Servers,OU=EERC-Computers,DC=rreerc,DC=adc,DC=delllabs,DC=net"
+$Servers="Xa1Server"
+
+$domainFQDN= $env:USERDNSDOMAIN
+$ClusterName= "Xa1Cluster"
+$prefix= "Xa"
+$LCMUserName= "Xa1user1"
+$LCMPassword= "D3llP@ssw0rd!"
+$admin= "administrator"
+$locpass= "DellP@ssw0rd!"
+$RG="XA1Pilot"
+$region="Eastus"
+$ArcGatewayID="/subscriptions/62986796-c210-4289-a117-303bce7bc77f/resourceGroups/Xa1pilot/providers/Microsoft.HybridCompute/gateways/Xa1gate"
+ $Subscription ="62986796-c210-4289-a117-303bce7bc77f"
+$Tenant = "0081ba70-31da-4d1a-a73c-b56477ccc937"
+
+Connect-AzAccount -SubscriptionId $Subscription -TenantId $Tenant -DeviceCode
+#####################################################################################################
+
+## azure create 
+# Resource group
+# key vault 
+# permissions to resource group - unless dell lab - then already done 
+# Do this doc then create a deployment and push the arc registeration in the validation phase 
+# then proceed with 2503 and higher deployment 
+Very good deployment resource 
+
+https://www.dell.com/support/kbdoc/en-us/000311203/deploy-azure-local-23h2-from-azure-portal-single-node-cluster?msockid=08879bf4648066fc0be88e3c650e67bf
+
